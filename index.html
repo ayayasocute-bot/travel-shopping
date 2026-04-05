@@ -306,6 +306,17 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC
 }
 .settings-gear:hover { background: rgba(255,255,255,0.28); }
 
+/* ── Connection status ── */
+.conn-status {
+  position: fixed; bottom: 90px; right: 20px;
+  font-size: 11px; padding: 5px 12px; border-radius: 20px;
+  z-index: 500; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  transition: opacity 0.3s;
+}
+.conn-status.ok { background: #dcfce7; color: #15803d; }
+.conn-status.err { background: #fef2f2; color: #dc2626; }
+.conn-status.connecting { background: #fef3c7; color: #92400e; }
+
 @keyframes flash {
   0%, 100% { background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); }
   50% { background: linear-gradient(135deg, #fde68a 0%, #fbbf24 100%); }
@@ -373,6 +384,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC
 
 <!-- ── Main ── -->
 <div class="main" id="main"></div>
+
+<!-- ── Connection status ── -->
+<div class="conn-status connecting" id="connStatus">⏳ 連線中…</div>
 
 <!-- ── FAB ── -->
 <button class="fab" onclick="openAddModal()" title="新增項目">＋</button>
@@ -508,6 +522,11 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
+// 啟用離線快取（刷新頁面也能保留資料）
+db.enablePersistence({ synchronizeTabs: true }).catch(err => {
+  console.warn('Firestore persistence error:', err.code);
+});
+
 // ══════════════════════════════════════
 //  State
 // ══════════════════════════════════════
@@ -538,13 +557,21 @@ function boot() {
     document.getElementById('userLabel').textContent = currentUser;
   }
 
+  const statusEl = document.getElementById('connStatus');
+
   // 即時監聽購物項目
   db.collection('items').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
     items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    statusEl.textContent = '✅ 已連線（' + items.length + ' 項）';
+    statusEl.className = 'conn-status ok';
+    setTimeout(() => { statusEl.style.opacity = '0'; }, 3000);
     refreshGroupFilters();
     render();
   }, err => {
-    console.error('Firestore items listener error:', err);
+    console.error('Firestore items error:', err.code, err.message);
+    statusEl.textContent = '❌ 連線失敗：' + err.code;
+    statusEl.className = 'conn-status err';
+    statusEl.style.opacity = '1';
   });
 
   // 即時監聽選單選項
@@ -552,17 +579,15 @@ function boot() {
     if (doc.exists) {
       dropdownOptions = doc.data();
     } else {
-      // 首次使用：寫入預設選項
       db.doc('settings/options').set(DEFAULT_OPTIONS);
       dropdownOptions = JSON.parse(JSON.stringify(DEFAULT_OPTIONS));
     }
     populateFormDropdowns();
-    // 如果設定面板開著，也更新顯示
     if (document.getElementById('settingsOverlay').classList.contains('open')) {
       renderOptionLists();
     }
   }, err => {
-    console.error('Firestore options listener error:', err);
+    console.error('Firestore options error:', err.code, err.message);
   });
 
   populateFormDropdowns();
@@ -749,16 +774,26 @@ function esc(s) {
 // ══════════════════════════════════════
 //  CRUD → Firestore
 // ══════════════════════════════════════
+function showConnStatus(msg, type) {
+  const el = document.getElementById('connStatus');
+  el.textContent = msg;
+  el.className = 'conn-status ' + type;
+  el.style.opacity = '1';
+  if (type === 'ok') setTimeout(() => { el.style.opacity = '0'; }, 3000);
+}
+
 function toggleBought(id) {
   const it = items.find(i => i.id === id);
   if (it) {
-    db.collection('items').doc(id).update({ purchased: !it.purchased });
+    db.collection('items').doc(id).update({ purchased: !it.purchased })
+      .catch(e => { alert('操作失敗：' + e.message); showConnStatus('❌ ' + e.code, 'err'); });
   }
 }
 
 function removeItem(id) {
   if (!confirm('確定刪除這個項目嗎？')) return;
-  db.collection('items').doc(id).delete();
+  db.collection('items').doc(id).delete()
+    .catch(e => { alert('刪除失敗：' + e.message); showConnStatus('❌ ' + e.code, 'err'); });
 }
 
 function saveItem() {
@@ -775,12 +810,20 @@ function saveItem() {
     photo:      formPhoto || null,
   };
 
+  let op;
   if (editingId) {
-    db.collection('items').doc(editingId).update(data);
+    op = db.collection('items').doc(editingId).update(data);
   } else {
     data.createdAt = new Date().toISOString();
-    db.collection('items').add(data);
+    op = db.collection('items').add(data);
   }
+
+  op.then(() => {
+    showConnStatus('✅ 已儲存', 'ok');
+  }).catch(e => {
+    alert('儲存失敗：' + e.message);
+    showConnStatus('❌ ' + e.code, 'err');
+  });
 
   closeModal();
 }
