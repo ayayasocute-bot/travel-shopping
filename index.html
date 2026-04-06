@@ -323,6 +323,55 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC
 .conn-status.err { background: rgba(239,68,68,0.2); color: #f87171; }
 .conn-status.connecting { background: rgba(245,158,11,0.2); color: #fbbf24; }
 
+/* ── Detail modal ── */
+.detail-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 350; opacity: 0; pointer-events: none; transition: opacity 0.25s;
+  padding: 16px;
+}
+.detail-overlay.open { opacity: 1; pointer-events: all; }
+.detail-card {
+  background: #1e1e2e; border-radius: 18px; width: 100%; max-width: 420px;
+  max-height: 90vh; overflow-y: auto; border: 1px solid #333348;
+  transform: scale(0.9); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+}
+.detail-overlay.open .detail-card { transform: scale(1); }
+.detail-img-wrap {
+  width: 100%; aspect-ratio: 1; background: linear-gradient(135deg, #252538 0%, #1e1e2e 100%);
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  border-radius: 18px 18px 0 0; position: relative;
+}
+.detail-img-wrap img { width: 100%; height: 100%; object-fit: contain; background: #151522; }
+.detail-img-placeholder { font-size: 80px; }
+.detail-close {
+  position: absolute; top: 12px; right: 12px;
+  width: 34px; height: 34px; border-radius: 50%;
+  background: rgba(0,0,0,0.6); border: none; color: white;
+  font-size: 18px; cursor: pointer; display: flex;
+  align-items: center; justify-content: center;
+  backdrop-filter: blur(4px);
+}
+.detail-body { padding: 16px 18px 20px; }
+.detail-name-zh { font-size: 20px; font-weight: 800; color: #f0f0f5; margin-bottom: 4px; }
+.detail-name-ja { font-size: 13px; color: #6b6b80; margin-bottom: 14px; }
+.detail-info { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.detail-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; color: #c4c4d4;
+}
+.detail-row-icon { width: 28px; text-align: center; font-size: 16px; flex-shrink: 0; }
+.detail-row-label { color: #71717a; font-size: 12px; min-width: 55px; }
+.detail-actions { display: flex; gap: 8px; }
+.detail-btn {
+  flex: 1; padding: 11px; border: none; border-radius: 10px;
+  font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s;
+}
+.detail-btn.status-bought { background: rgba(34,197,94,0.2); color: #4ade80; }
+.detail-btn.status-unbought { background: rgba(245,158,11,0.2); color: #fbbf24; }
+.detail-btn.edit-btn { background: #2a2a3c; color: #a1a1b5; }
+.detail-btn.del-btn { background: rgba(239,68,68,0.15); color: #f87171; }
+
 @keyframes flash {
   0%, 100% { background: linear-gradient(135deg, #312e81 0%, #3730a3 100%); }
   50% { background: linear-gradient(135deg, #3730a3 0%, #4f46e5 100%); }
@@ -390,6 +439,32 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC
 
 <!-- ── Main ── -->
 <div class="main" id="main"></div>
+
+<!-- ── Detail modal ── -->
+<div class="detail-overlay" id="detailOverlay" onclick="if(event.target===this)closeDetail()">
+  <div class="detail-card">
+    <div class="detail-img-wrap">
+      <img id="detailImg" style="display:none" alt="">
+      <div id="detailImgPlaceholder" class="detail-img-placeholder"></div>
+      <button class="detail-close" onclick="closeDetail()">✕</button>
+    </div>
+    <div class="detail-body">
+      <div class="detail-name-zh" id="detailNameZh"></div>
+      <div class="detail-name-ja" id="detailNameJa"></div>
+      <div class="detail-info">
+        <div class="detail-row" id="detailLocation"><span class="detail-row-icon">📍</span><span class="detail-row-label">地點</span><span id="detailLocVal"></span></div>
+        <div class="detail-row" id="detailCategory"><span class="detail-row-icon">🏷️</span><span class="detail-row-label">性質</span><span id="detailCatVal"></span></div>
+        <div class="detail-row" id="detailRequester"><span class="detail-row-icon">👤</span><span class="detail-row-label">需求者</span><span id="detailReqVal"></span></div>
+        <div class="detail-row"><span class="detail-row-icon">📋</span><span class="detail-row-label">狀態</span><span id="detailStatusVal"></span></div>
+      </div>
+      <div class="detail-actions">
+        <button class="detail-btn status-unbought" id="detailToggleBtn" onclick="detailToggleBought()"></button>
+        <button class="detail-btn edit-btn" onclick="detailEdit()">✏️ 編輯</button>
+        <button class="detail-btn del-btn" onclick="detailDelete()">🗑️ 刪除</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ── Connection status ── -->
 <div class="conn-status connecting" id="connStatus">⏳ 連線中…</div>
@@ -746,10 +821,10 @@ function cardHTML(it) {
   return `
     <div class="item-card${it.purchased ? ' purchased' : ''}" id="card-${it.id}">
       ${it.purchased ? '<div class="purchased-badge">✓ 已購買</div>' : ''}
-      <div class="card-img-wrap">${img}</div>
+      <div class="card-img-wrap" onclick="openDetail('${it.id}')" style="cursor:pointer">${img}</div>
       <div class="card-body">
-        <div class="card-name-zh">${esc(it.nameZh)}</div>
-        ${it.nameJa ? `<div class="card-name-ja">${esc(it.nameJa)}</div>` : ''}
+        <div class="card-name-zh" onclick="openDetail('${it.id}')" style="cursor:pointer">${esc(it.nameZh)}</div>
+        ${it.nameJa ? `<div class="card-name-ja" onclick="openDetail('${it.id}')" style="cursor:pointer">${esc(it.nameJa)}</div>` : ''}
         <div class="card-tags">
           ${it.location  ? `<span class="tag loc">📍 ${esc(it.location)}</span>`  : ''}
           ${it.category  ? `<span class="tag cat">🏷️ ${esc(it.category)}</span>`  : ''}
@@ -998,6 +1073,81 @@ function populateFormDropdowns() {
   locSel.value = prevLoc;
   catSel.value = prevCat;
   reqSel.value = prevReq;
+}
+
+// ══════════════════════════════════════
+//  Detail view (放大檢視)
+// ══════════════════════════════════════
+let detailItemId = null;
+
+function openDetail(id) {
+  const it = items.find(i => i.id === id);
+  if (!it) return;
+  detailItemId = id;
+
+  // Photo
+  const imgEl = document.getElementById('detailImg');
+  const phEl  = document.getElementById('detailImgPlaceholder');
+  if (it.photo) {
+    imgEl.src = it.photo;
+    imgEl.style.display = 'block';
+    phEl.style.display  = 'none';
+  } else {
+    imgEl.style.display = 'none';
+    phEl.style.display  = 'flex';
+    phEl.textContent    = catEmoji(it.category);
+  }
+
+  // Info
+  document.getElementById('detailNameZh').textContent = it.nameZh || '';
+  const jaEl = document.getElementById('detailNameJa');
+  jaEl.textContent = it.nameJa || '';
+  jaEl.style.display = it.nameJa ? '' : 'none';
+
+  document.getElementById('detailLocVal').textContent = it.location || '未指定';
+  document.getElementById('detailCatVal').textContent = it.category || '未指定';
+  document.getElementById('detailReqVal').textContent = it.requester || '未指定';
+
+  // Status
+  updateDetailStatus(it.purchased);
+
+  document.getElementById('detailOverlay').classList.add('open');
+}
+
+function updateDetailStatus(purchased) {
+  const statusEl = document.getElementById('detailStatusVal');
+  const btnEl    = document.getElementById('detailToggleBtn');
+  statusEl.textContent = purchased ? '✅ 已購買' : '⬜ 未購買';
+  statusEl.style.color = purchased ? '#4ade80' : '#fbbf24';
+  btnEl.textContent    = purchased ? '↩️ 改為未購買' : '✅ 標記已購買';
+  btnEl.className      = 'detail-btn ' + (purchased ? 'status-bought' : 'status-unbought');
+}
+
+function closeDetail() {
+  document.getElementById('detailOverlay').classList.remove('open');
+  detailItemId = null;
+}
+
+function detailToggleBought() {
+  if (!detailItemId) return;
+  const it = items.find(i => i.id === detailItemId);
+  if (!it) return;
+  const newVal = !it.purchased;
+  db.collection('items').doc(detailItemId).update({ purchased: newVal })
+    .catch(e => { alert('操作失敗：' + e.message); });
+  updateDetailStatus(newVal);
+}
+
+function detailEdit() {
+  if (!detailItemId) return;
+  closeDetail();
+  startEdit(detailItemId);
+}
+
+function detailDelete() {
+  if (!detailItemId) return;
+  removeItem(detailItemId);
+  closeDetail();
 }
 
 // ══════════════════════════════════════
