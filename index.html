@@ -722,6 +722,15 @@ function setSort(mode) {
   document.querySelectorAll('.sort-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.sort === mode)
   );
+  // 按「全部」時清除所有篩選條件
+  if (mode === 'all') {
+    document.getElementById('selLocation').value  = '';
+    document.getElementById('selCategory').value  = '';
+    document.getElementById('selRequester').value = '';
+    onlyUnsold = false;
+    document.getElementById('chipUnpurchased').classList.remove('active');
+    document.getElementById('searchInput').value = '';
+  }
   document.getElementById('selLocation').style.display  = (mode === 'location')  ? '' : 'none';
   document.getElementById('selCategory').style.display  = (mode === 'category')  ? '' : 'none';
   document.getElementById('selRequester').style.display = (mode === 'requester') ? '' : 'none';
@@ -1114,17 +1123,19 @@ function populateFormDropdowns() {
   const prevCat = catSel.value;
   const prevReq = reqSel.value;
 
+  const customOpt = '<option value="__custom__" style="color:#71717a">✏️ 其他(請自行輸入…)</option>';
+
   locSel.innerHTML = '<option value="">請選擇地點（選填）</option>'
     + (dropdownOptions.locations || []).map(v => `<option>${esc(v)}</option>`).join('')
-    + '<option value="__custom__">✏️ 自行輸入…</option>';
+    + customOpt;
 
   catSel.innerHTML = '<option value="">請選擇性質（選填）</option>'
     + (dropdownOptions.categories || []).map(v => `<option>${esc(v)}</option>`).join('')
-    + '<option value="__custom__">✏️ 自行輸入…</option>';
+    + customOpt;
 
   reqSel.innerHTML = '<option value="">預設為自己</option>'
     + (dropdownOptions.requesters || []).map(v => `<option>${esc(v)}</option>`).join('')
-    + '<option value="__custom__">✏️ 自行輸入…</option>';
+    + customOpt;
 
   locSel.value = prevLoc;
   catSel.value = prevCat;
