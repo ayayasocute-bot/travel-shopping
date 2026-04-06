@@ -321,6 +321,37 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC
 }
 .settings-gear:hover { background: rgba(255,255,255,0.18); }
 
+/* ── List bar ── */
+.list-bar {
+  display: flex; gap: 6px; align-items: center;
+  margin-top: 8px; flex-wrap: wrap;
+}
+.list-name-input {
+  flex: 1; min-width: 80px; padding: 5px 10px;
+  background: rgba(255,255,255,0.08); border: 1.5px solid transparent;
+  border-radius: 8px; color: #f0f0f5; font-size: 14px; font-weight: 700;
+  font-family: inherit; outline: none; transition: border-color 0.2s;
+}
+.list-name-input:focus { border-color: #6366f1; background: rgba(255,255,255,0.12); }
+.list-bar-btn {
+  padding: 5px 10px; border-radius: 8px; border: 1.5px solid #3a3a50;
+  background: rgba(255,255,255,0.06); color: #a1a1b5; font-size: 12px;
+  cursor: pointer; font-weight: 600; white-space: nowrap; transition: all 0.2s;
+  font-family: inherit;
+}
+.list-bar-btn:hover { background: rgba(255,255,255,0.12); color: #e4e4e7; }
+.list-bar-btn.danger { border-color: rgba(239,68,68,0.3); color: #f87171; }
+.list-bar-btn.danger:hover { background: rgba(239,68,68,0.15); }
+.list-bar-btn.add { border-color: rgba(99,102,241,0.4); color: #a5b4fc; }
+.list-bar-btn.add:hover { background: rgba(99,102,241,0.15); }
+.list-bar-select {
+  padding: 5px 8px; border-radius: 8px; border: 1.5px solid #3a3a50;
+  background: #1a1a2e; color: #a1a1b5; font-size: 12px;
+  cursor: pointer; outline: none; font-family: inherit;
+  max-width: 140px;
+}
+.list-bar-select option { background: #1e1e2e; color: #e4e4e7; }
+
 /* ── Connection status ── */
 .conn-status {
   position: fixed; bottom: 90px; right: 20px;
@@ -404,6 +435,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC
       </div>
     </div>
   </div>
+  <!-- List bar -->
+  <div class="list-bar">
+    <input class="list-name-input" id="listNameInput" placeholder="清單名稱"
+      onblur="renameList()" onkeydown="if(event.key==='Enter')this.blur()">
+    <button class="list-bar-btn danger" onclick="deleteList()">🗑️ 刪除</button>
+    <select class="list-bar-select" id="listSelect" onchange="switchList(this.value)"></select>
+    <button class="list-bar-btn add" onclick="createList()">＋ 新增清單</button>
+  </div>
+
   <div class="search-wrap">
     <span class="search-icon">🔍</span>
     <input class="search-input" id="searchInput" type="text"
@@ -634,6 +674,12 @@ let editingId    = null;
 let formPhoto    = null;
 let formBought   = false;
 
+// Multi-list state
+let lists          = [];
+let currentListId  = localStorage.getItem('travel_currentList') || '';
+let itemsUnsub     = null;
+let optionsUnsub   = null;
+
 const DEFAULT_OPTIONS = {
   locations:  ['松本清','唐吉訶德','成田機場','羽田機場','藥妝店','便利商店','百貨公司','超市'],
   categories: ['藥妝','零食','伴手禮','電器','服飾','保養品','文具'],
@@ -653,29 +699,86 @@ function boot() {
     document.getElementById('userLabel').textContent = currentUser;
   }
 
-  const statusEl = document.getElementById('connStatus');
+  // 監聽清單集合
+  db.collection('lists').orderBy('createdAt', 'asc').onSnapshot(async snapshot => {
+    lists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-  // 即時監聽購物項目
-  db.collection('items').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
-    items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    statusEl.textContent = '✅ 已連線（' + items.length + ' 項）';
-    statusEl.className = 'conn-status ok';
-    setTimeout(() => { statusEl.style.opacity = '0'; }, 3000);
-    refreshGroupFilters();
-    render();
-  }, err => {
-    console.error('Firestore items error:', err.code, err.message);
-    statusEl.textContent = '❌ 連線失敗：' + err.code;
-    statusEl.className = 'conn-status err';
-    statusEl.style.opacity = '1';
+    if (lists.length === 0) {
+      // 首次使用或遷移：建立預設清單
+      const ref = await db.collection('lists').add({ name: '日本旅遊', createdAt: new Date().toISOString() });
+      // 遷移舊有項目（沒有 listId 的）
+      const oldItems = await db.collection('items').get();
+      const batch = db.batch();
+      oldItems.docs.forEach(doc => {
+        if (!doc.data().listId) {
+          batch.update(doc.ref, { listId: ref.id });
+        }
+      });
+      // 遷移舊設定
+      const oldOpts = await db.doc('settings/options').get();
+      if (oldOpts.exists) {
+        batch.set(db.doc('settings/' + ref.id), oldOpts.data());
+      }
+      await batch.commit();
+      currentListId = ref.id;
+      localStorage.setItem('travel_currentList', currentListId);
+      return; // onSnapshot 會再次觸發
+    }
+
+    // 確保 currentListId 有效
+    if (!currentListId || !lists.find(l => l.id === currentListId)) {
+      currentListId = lists[0].id;
+      localStorage.setItem('travel_currentList', currentListId);
+    }
+
+    updateListBar();
+    attachListListeners();
   });
 
-  // 即時監聽選單選項
-  db.doc('settings/options').onSnapshot(doc => {
+  populateFormDropdowns();
+  render();
+}
+
+function updateListBar() {
+  const sel = document.getElementById('listSelect');
+  sel.innerHTML = lists.map(l =>
+    `<option value="${l.id}"${l.id === currentListId ? ' selected' : ''}>${esc(l.name)}</option>`
+  ).join('');
+  const cur = lists.find(l => l.id === currentListId);
+  document.getElementById('listNameInput').value = cur ? cur.name : '';
+}
+
+function attachListListeners() {
+  // 取消舊的監聽
+  if (itemsUnsub) itemsUnsub();
+  if (optionsUnsub) optionsUnsub();
+
+  const statusEl = document.getElementById('connStatus');
+
+  // 即時監聽當前清單的購物項目
+  itemsUnsub = db.collection('items')
+    .where('listId', '==', currentListId)
+    .onSnapshot(snapshot => {
+      items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      items.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+      statusEl.textContent = '✅ 已連線（' + items.length + ' 項）';
+      statusEl.className = 'conn-status ok';
+      setTimeout(() => { statusEl.style.opacity = '0'; }, 3000);
+      refreshGroupFilters();
+      render();
+    }, err => {
+      console.error('Firestore items error:', err.code, err.message);
+      statusEl.textContent = '❌ 連線失敗：' + err.code;
+      statusEl.className = 'conn-status err';
+      statusEl.style.opacity = '1';
+    });
+
+  // 即時監聯當前清單的選單選項
+  optionsUnsub = db.doc('settings/' + currentListId).onSnapshot(doc => {
     if (doc.exists) {
       dropdownOptions = doc.data();
     } else {
-      db.doc('settings/options').set(DEFAULT_OPTIONS);
+      db.doc('settings/' + currentListId).set(DEFAULT_OPTIONS);
       dropdownOptions = JSON.parse(JSON.stringify(DEFAULT_OPTIONS));
     }
     populateFormDropdowns();
@@ -685,9 +788,6 @@ function boot() {
   }, err => {
     console.error('Firestore options error:', err.code, err.message);
   });
-
-  populateFormDropdowns();
-  render();
 }
 
 // ══════════════════════════════════════
@@ -920,6 +1020,7 @@ function saveItem() {
     op = db.collection('items').doc(editingId).update(data);
   } else {
     data.createdAt = new Date().toISOString();
+    data.listId = currentListId;
     op = db.collection('items').add(data);
   }
 
@@ -1092,7 +1193,7 @@ function moveOption(key, idx, dir) {
   const newIdx = idx + dir;
   if (newIdx < 0 || newIdx >= arr.length) return;
   [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
-  db.doc('settings/options').set(dropdownOptions);
+  db.doc('settings/' + currentListId).set(dropdownOptions);
   renderOptionLists();
   populateFormDropdowns();
 }
@@ -1104,7 +1205,7 @@ function addOption(key) {
   if (!v) return;
   if ((dropdownOptions[key] || []).includes(v)) { input.value = ''; return; }
   dropdownOptions[key] = [...(dropdownOptions[key] || []), v];
-  db.doc('settings/options').set(dropdownOptions);
+  db.doc('settings/' + currentListId).set(dropdownOptions);
   input.value = '';
   renderOptionLists();
   populateFormDropdowns();
@@ -1112,7 +1213,7 @@ function addOption(key) {
 
 function removeOption(key, idx) {
   dropdownOptions[key].splice(idx, 1);
-  db.doc('settings/options').set(dropdownOptions);
+  db.doc('settings/' + currentListId).set(dropdownOptions);
   renderOptionLists();
   populateFormDropdowns();
 }
@@ -1238,6 +1339,61 @@ function detailDelete() {
   if (!detailItemId) return;
   removeItem(detailItemId);
   closeDetail();
+}
+
+// ══════════════════════════════════════
+//  Multi-list CRUD
+// ══════════════════════════════════════
+async function createList() {
+  const name = prompt('請輸入新清單名稱：');
+  if (!name || !name.trim()) return;
+  const ref = await db.collection('lists').add({ name: name.trim(), createdAt: new Date().toISOString() });
+  currentListId = ref.id;
+  localStorage.setItem('travel_currentList', currentListId);
+  // 新清單會用預設選項
+  db.doc('settings/' + ref.id).set(JSON.parse(JSON.stringify(DEFAULT_OPTIONS)));
+  showConnStatus('✅ 已新增清單', 'ok');
+}
+
+async function deleteList() {
+  if (lists.length <= 1) { alert('至少需保留一個清單！'); return; }
+  const cur = lists.find(l => l.id === currentListId);
+  if (!confirm('確定刪除「' + (cur ? cur.name : '') + '」及其所有項目嗎？此操作無法復原。')) return;
+
+  // 刪除該清單的所有項目
+  const snap = await db.collection('items').where('listId', '==', currentListId).get();
+  const batch = db.batch();
+  snap.docs.forEach(doc => batch.delete(doc.ref));
+  batch.delete(db.doc('settings/' + currentListId));
+  batch.delete(db.collection('lists').doc(currentListId));
+  await batch.commit();
+
+  // 切換到其他清單
+  currentListId = lists.find(l => l.id !== currentListId).id;
+  localStorage.setItem('travel_currentList', currentListId);
+  showConnStatus('🗑️ 清單已刪除', 'ok');
+}
+
+function switchList(listId) {
+  if (listId === currentListId) return;
+  currentListId = listId;
+  localStorage.setItem('travel_currentList', currentListId);
+  updateListBar();
+  attachListListeners();
+}
+
+function renameList() {
+  const input = document.getElementById('listNameInput');
+  const newName = input.value.trim();
+  if (!newName) {
+    const cur = lists.find(l => l.id === currentListId);
+    input.value = cur ? cur.name : '';
+    return;
+  }
+  const cur = lists.find(l => l.id === currentListId);
+  if (cur && cur.name !== newName) {
+    db.collection('lists').doc(currentListId).update({ name: newName });
+  }
 }
 
 // ══════════════════════════════════════
