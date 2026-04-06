@@ -518,19 +518,22 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC
     <!-- Location -->
     <div class="form-group">
       <label class="form-label">購買地點</label>
-      <select class="form-select" id="fLocation"></select>
+      <select class="form-select" id="fLocation" onchange="onSelectChange('fLocation','fLocationCustom')"></select>
+      <input class="form-input" id="fLocationCustom" type="text" placeholder="其他" style="display:none;margin-top:8px">
     </div>
 
     <!-- Category -->
     <div class="form-group">
       <label class="form-label">項目性質</label>
-      <select class="form-select" id="fCategory"></select>
+      <select class="form-select" id="fCategory" onchange="onSelectChange('fCategory','fCategoryCustom')"></select>
+      <input class="form-input" id="fCategoryCustom" type="text" placeholder="其他" style="display:none;margin-top:8px">
     </div>
 
     <!-- Requester -->
     <div class="form-group">
       <label class="form-label">需求者</label>
-      <select class="form-select" id="fRequester"></select>
+      <select class="form-select" id="fRequester" onchange="onSelectChange('fRequester','fRequesterCustom')"></select>
+      <input class="form-input" id="fRequesterCustom" type="text" placeholder="其他" style="display:none;margin-top:8px">
     </div>
 
     <!-- Status -->
@@ -893,9 +896,9 @@ function saveItem() {
   const data = {
     nameZh,
     nameJa:     document.getElementById('fNameJa').value.trim(),
-    location:   document.getElementById('fLocation').value,
-    category:   document.getElementById('fCategory').value,
-    requester:  document.getElementById('fRequester').value || currentUser,
+    location:   getFieldValue('fLocation', 'fLocationCustom'),
+    category:   getFieldValue('fCategory', 'fCategoryCustom'),
+    requester:  getFieldValue('fRequester', 'fRequesterCustom') || currentUser,
     purchased:  formBought,
     photo:      formPhoto || null,
   };
@@ -937,12 +940,37 @@ function openAddModal() {
   document.getElementById('fLocation').value  = '';
   document.getElementById('fCategory').value  = '';
   document.getElementById('fRequester').value = '';
+  resetCustomInputs();
   document.getElementById('photoPreview').style.display  = 'none';
   document.getElementById('photoPlaceholder').style.display = 'block';
   document.getElementById('photoInput').value = '';
   setFormStatus(false);
   document.getElementById('modalOverlay').classList.add('open');
   setTimeout(() => document.getElementById('fNameZh').focus(), 350);
+}
+
+function resetCustomInputs() {
+  ['fLocationCustom','fCategoryCustom','fRequesterCustom'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+    document.getElementById(id).value = '';
+  });
+}
+
+function setSelectOrCustom(selId, inputId, value) {
+  const sel = document.getElementById(selId);
+  const inp = document.getElementById(inputId);
+  // Try setting the dropdown value
+  sel.value = value || '';
+  if (sel.value === (value || '')) {
+    // Found in dropdown
+    inp.style.display = 'none';
+    inp.value = '';
+  } else {
+    // Not in dropdown — use custom input
+    sel.value = '__custom__';
+    inp.style.display = '';
+    inp.value = value || '';
+  }
 }
 
 function startEdit(id) {
@@ -955,9 +983,9 @@ function startEdit(id) {
   document.getElementById('modalTitle').textContent    = '編輯購物項目';
   document.getElementById('fNameZh').value    = it.nameZh    || '';
   document.getElementById('fNameJa').value    = it.nameJa    || '';
-  document.getElementById('fLocation').value  = it.location  || '';
-  document.getElementById('fCategory').value  = it.category  || '';
-  document.getElementById('fRequester').value = it.requester || '';
+  setSelectOrCustom('fLocation', 'fLocationCustom', it.location);
+  setSelectOrCustom('fCategory', 'fCategoryCustom', it.category);
+  setSelectOrCustom('fRequester', 'fRequesterCustom', it.requester);
 
   if (it.photo) {
     document.getElementById('photoPreview').src            = it.photo;
@@ -1087,17 +1115,40 @@ function populateFormDropdowns() {
   const prevReq = reqSel.value;
 
   locSel.innerHTML = '<option value="">請選擇地點（選填）</option>'
-    + (dropdownOptions.locations || []).map(v => `<option>${esc(v)}</option>`).join('');
+    + (dropdownOptions.locations || []).map(v => `<option>${esc(v)}</option>`).join('')
+    + '<option value="__custom__">✏️ 自行輸入…</option>';
 
   catSel.innerHTML = '<option value="">請選擇性質（選填）</option>'
-    + (dropdownOptions.categories || []).map(v => `<option>${esc(v)}</option>`).join('');
+    + (dropdownOptions.categories || []).map(v => `<option>${esc(v)}</option>`).join('')
+    + '<option value="__custom__">✏️ 自行輸入…</option>';
 
   reqSel.innerHTML = '<option value="">預設為自己</option>'
-    + (dropdownOptions.requesters || []).map(v => `<option>${esc(v)}</option>`).join('');
+    + (dropdownOptions.requesters || []).map(v => `<option>${esc(v)}</option>`).join('')
+    + '<option value="__custom__">✏️ 自行輸入…</option>';
 
   locSel.value = prevLoc;
   catSel.value = prevCat;
   reqSel.value = prevReq;
+}
+
+function onSelectChange(selId, inputId) {
+  const sel = document.getElementById(selId);
+  const inp = document.getElementById(inputId);
+  if (sel.value === '__custom__') {
+    inp.style.display = '';
+    inp.focus();
+  } else {
+    inp.style.display = 'none';
+    inp.value = '';
+  }
+}
+
+function getFieldValue(selId, inputId) {
+  const sel = document.getElementById(selId);
+  if (sel.value === '__custom__') {
+    return document.getElementById(inputId).value.trim();
+  }
+  return sel.value;
 }
 
 // ══════════════════════════════════════
