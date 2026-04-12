@@ -254,9 +254,24 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC
 }
 .photo-area:hover { border-color: #6366f1; background: #151522; }
 .photo-area input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
-.photo-preview { width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; display: none; }
 .photo-placeholder-icon { font-size: 36px; margin-bottom: 6px; }
 .photo-hint { font-size: 12px; color: #6b6b80; }
+
+/* ── Photo thumbnails in form ── */
+.photo-thumbs {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;
+}
+.photo-thumb {
+  position: relative; width: 72px; height: 72px; border-radius: 8px;
+  overflow: hidden; border: 1.5px solid #3a3a50;
+}
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.photo-thumb-del {
+  position: absolute; top: 2px; right: 2px; width: 20px; height: 20px;
+  border-radius: 50%; background: rgba(239,68,68,0.85); border: none;
+  color: white; font-size: 11px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
 
 .status-row { display: flex; gap: 10px; }
 .status-opt {
@@ -420,11 +435,52 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC
 .detail-overlay.open .detail-card { transform: scale(1); }
 .detail-img-wrap {
   width: 100%; aspect-ratio: 1; background: linear-gradient(135deg, #252538 0%, #1e1e2e 100%);
-  display: flex; align-items: center; justify-content: center; overflow: hidden;
-  border-radius: 18px 18px 0 0; position: relative;
+  overflow: hidden; border-radius: 18px 18px 0 0; position: relative;
 }
-.detail-img-wrap img { width: 100%; height: 100%; object-fit: contain; background: #151522; }
-.detail-img-placeholder { font-size: 80px; }
+.detail-img-placeholder {
+  font-size: 80px; width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ── Detail image slider ── */
+.detail-slider {
+  display: flex; width: 100%; height: 100%;
+  overflow-x: auto; scroll-snap-type: x mandatory;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.detail-slider::-webkit-scrollbar { display: none; }
+.detail-slide {
+  flex: 0 0 100%; width: 100%; height: 100%;
+  scroll-snap-align: start;
+  display: flex; align-items: center; justify-content: center;
+}
+.detail-slide img { width: 100%; height: 100%; object-fit: contain; background: #151522; }
+.detail-dots {
+  position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 6px; z-index: 2;
+}
+.detail-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: rgba(255,255,255,0.35); transition: background 0.2s;
+}
+.detail-dot.active { background: white; }
+.detail-nav-btn {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 32px; height: 32px; border-radius: 50%;
+  background: rgba(0,0,0,0.5); border: none; color: white;
+  font-size: 16px; cursor: pointer; z-index: 2;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(4px);
+}
+.detail-nav-btn.prev { left: 8px; }
+.detail-nav-btn.next { right: 48px; }
+
+/* ── Detail URL row ── */
+.detail-link {
+  color: #818cf8; text-decoration: none; word-break: break-all;
+}
+.detail-link:hover { text-decoration: underline; }
+.detail-note { color: #c4c4d4; font-size: 13px; white-space: pre-wrap; word-break: break-word; }
 .detail-close {
   position: absolute; top: 12px; right: 12px;
   width: 34px; height: 34px; border-radius: 50%;
@@ -533,19 +589,24 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC
 <!-- ── Detail modal ── -->
 <div class="detail-overlay" id="detailOverlay" onclick="if(event.target===this)closeDetail()">
   <div class="detail-card">
-    <div class="detail-img-wrap">
-      <img id="detailImg" style="display:none" alt="">
+    <div class="detail-img-wrap" id="detailImgWrap">
       <div id="detailImgPlaceholder" class="detail-img-placeholder"></div>
+      <div class="detail-slider" id="detailSlider"></div>
+      <div class="detail-dots" id="detailDots"></div>
+      <button class="detail-nav-btn prev" id="detailPrev" onclick="slideDetail(-1)" style="display:none">‹</button>
+      <button class="detail-nav-btn next" id="detailNext" onclick="slideDetail(1)" style="display:none">›</button>
       <button class="detail-close" onclick="closeDetail()">✕</button>
     </div>
     <div class="detail-body">
       <div class="detail-name-zh" id="detailNameZh"></div>
       <div class="detail-name-ja" id="detailNameJa"></div>
       <div class="detail-info">
-        <div class="detail-row" id="detailLocation"><span class="detail-row-icon">📍</span><span class="detail-row-label">地點</span><span id="detailLocVal"></span></div>
-        <div class="detail-row" id="detailCategory"><span class="detail-row-icon">🏷️</span><span class="detail-row-label">性質</span><span id="detailCatVal"></span></div>
-        <div class="detail-row" id="detailRequester"><span class="detail-row-icon">👤</span><span class="detail-row-label">需求者</span><span id="detailReqVal"></span></div>
+        <div class="detail-row"><span class="detail-row-icon">📍</span><span class="detail-row-label">地點</span><span id="detailLocVal"></span></div>
+        <div class="detail-row"><span class="detail-row-icon">🏷️</span><span class="detail-row-label">性質</span><span id="detailCatVal"></span></div>
+        <div class="detail-row"><span class="detail-row-icon">👤</span><span class="detail-row-label">需求者</span><span id="detailReqVal"></span></div>
         <div class="detail-row"><span class="detail-row-icon">📋</span><span class="detail-row-label">狀態</span><span id="detailStatusVal"></span></div>
+        <div class="detail-row" id="detailUrlRow" style="display:none"><span class="detail-row-icon">🔗</span><span class="detail-row-label">網址</span><span id="detailUrlVal"></span></div>
+        <div class="detail-row" id="detailNoteRow" style="display:none"><span class="detail-row-icon">📝</span><span class="detail-row-label">備註</span><span id="detailNoteVal" class="detail-note"></span></div>
       </div>
       <div class="detail-actions">
         <button class="detail-btn status-unbought" id="detailToggleBtn" onclick="detailToggleBought()"></button>
@@ -570,17 +631,17 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
 
-    <!-- Photo -->
+    <!-- Photos (multi) -->
     <div class="form-group">
       <label class="form-label">物品照片</label>
       <div class="photo-area" id="photoArea">
-        <input type="file" accept="image/*" id="photoInput" onchange="onPhotoChange(event)">
-        <img id="photoPreview" class="photo-preview" alt="預覽">
+        <input type="file" accept="image/*" id="photoInput" onchange="onPhotoChange(event)" multiple>
         <div id="photoPlaceholder">
           <div class="photo-placeholder-icon">📷</div>
-          <div class="photo-hint">點擊上傳照片（選填）</div>
+          <div class="photo-hint">點擊上傳照片（可多選，選填）</div>
         </div>
       </div>
+      <div class="photo-thumbs" id="photoThumbs"></div>
     </div>
 
     <!-- Chinese name -->
@@ -629,6 +690,18 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC
       <div class="form-chips-dropdown" id="fRequesterDrop"></div>
       <input class="form-input" id="fRequesterCustom" type="text" placeholder="輸入後按 Enter 新增…"
         style="display:none;margin-top:6px" onkeydown="if(event.key==='Enter'){addCustomChip('requester');event.preventDefault()}">
+    </div>
+
+    <!-- URL -->
+    <div class="form-group">
+      <label class="form-label">網址</label>
+      <input class="form-input" id="fUrl" type="url" placeholder="例：https://www.example.com（選填）">
+    </div>
+
+    <!-- Note -->
+    <div class="form-group">
+      <label class="form-label">備註</label>
+      <textarea class="form-input" id="fNote" rows="3" placeholder="輸入備註（選填）" style="resize:vertical;min-height:60px"></textarea>
     </div>
 
     <!-- Status -->
@@ -735,7 +808,7 @@ let currentUser  = localStorage.getItem('travel_user') || '';
 let sortMode     = 'all';
 let onlyUnsold   = false;
 let editingId    = null;
-let formPhoto    = null;
+let formPhotos   = [];
 let formBought   = false;
 const formChips  = { location: [], category: [], requester: [] };
 
@@ -1017,9 +1090,16 @@ function render() {
     `).join('');
 }
 
+function getFirstPhoto(it) {
+  if (it.photos && it.photos.length) return it.photos[0];
+  if (it.photo) return it.photo;
+  return null;
+}
+
 function cardHTML(it) {
-  const img = it.photo
-    ? `<img src="${it.photo}" alt="${esc(it.nameZh)}" onerror="this.style.display='none'">`
+  const firstImg = getFirstPhoto(it);
+  const img = firstImg
+    ? `<img src="${firstImg}" alt="${esc(it.nameZh)}" onerror="this.style.display='none'">`
     : `<div class="card-img-placeholder">${catEmoji(it.category)}</div>`;
 
   return `
@@ -1100,7 +1180,10 @@ function saveItem() {
     category:   formChips.category.length   ? [...formChips.category]  : [],
     requester:  formChips.requester.length  ? [...formChips.requester] : [currentUser],
     purchased:  formBought,
-    photo:      formPhoto || null,
+    photos:     [...formPhotos],
+    photo:      formPhotos.length ? formPhotos[0] : null,
+    url:        document.getElementById('fUrl').value.trim() || '',
+    note:       document.getElementById('fNote').value.trim() || '',
   };
 
   let op;
@@ -1137,7 +1220,10 @@ function copyToList() {
     category:  toArr(it.category),
     requester: toArr(it.requester),
     purchased: false,
+    photos:    it.photos    || (it.photo ? [it.photo] : []),
     photo:     it.photo     || null,
+    url:       it.url       || '',
+    note:      it.note      || '',
     listId:    targetId,
     createdAt: new Date().toISOString()
   };
@@ -1163,17 +1249,19 @@ function openAddModal() {
     return;
   }
   editingId  = null;
-  formPhoto  = null;
+  formPhotos = [];
   formBought = false;
   document.getElementById('modalTitle').textContent = '新增購物項目';
   document.getElementById('fNameZh').value    = '';
   document.getElementById('fNameJa').value    = '';
+  document.getElementById('fUrl').value       = '';
+  document.getElementById('fNote').value      = '';
   formChips.location  = [];
   formChips.category  = [];
   formChips.requester = [];
   renderFormChips();
   resetCustomInputs();
-  document.getElementById('photoPreview').style.display  = 'none';
+  renderPhotoThumbs();
   document.getElementById('photoPlaceholder').style.display = 'block';
   document.getElementById('photoInput').value = '';
   setFormStatus(false);
@@ -1193,27 +1281,22 @@ function startEdit(id) {
   const it = items.find(i => i.id === id);
   if (!it) return;
   editingId  = id;
-  formPhoto  = it.photo || null;
+  formPhotos = it.photos ? [...it.photos] : (it.photo ? [it.photo] : []);
   formBought = it.purchased || false;
 
   document.getElementById('modalTitle').textContent    = '編輯購物項目';
   document.getElementById('fNameZh').value    = it.nameZh    || '';
   document.getElementById('fNameJa').value    = it.nameJa    || '';
+  document.getElementById('fUrl').value       = it.url       || '';
+  document.getElementById('fNote').value      = it.note      || '';
   // 載入多選值
   formChips.location  = toArr(it.location);
   formChips.category  = toArr(it.category);
   formChips.requester = toArr(it.requester);
   renderFormChips();
   resetCustomInputs();
-
-  if (it.photo) {
-    document.getElementById('photoPreview').src            = it.photo;
-    document.getElementById('photoPreview').style.display  = 'block';
-    document.getElementById('photoPlaceholder').style.display = 'none';
-  } else {
-    document.getElementById('photoPreview').style.display  = 'none';
-    document.getElementById('photoPlaceholder').style.display = 'block';
-  }
+  renderPhotoThumbs();
+  document.getElementById('photoPlaceholder').style.display = formPhotos.length ? 'none' : 'block';
   document.getElementById('photoInput').value = '';
   setFormStatus(it.purchased);
 
@@ -1353,30 +1436,50 @@ document.addEventListener('click', e => {
 });
 
 // ══════════════════════════════════════
-//  Photo upload (壓縮至 600px，減少 Firestore 用量)
+//  Photo upload (多張，壓縮至 600px)
 // ══════════════════════════════════════
 function onPhotoChange(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const img = new Image();
-  const url = URL.createObjectURL(file);
-  img.onload = () => {
-    const MAX = 600;
-    let w = img.width, h = img.height;
-    if (w > MAX || h > MAX) {
-      if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
-      else        { w = Math.round(w * MAX / h); h = MAX; }
-    }
-    const canvas = document.createElement('canvas');
-    canvas.width = w; canvas.height = h;
-    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-    formPhoto = canvas.toDataURL('image/jpeg', 0.6);
-    URL.revokeObjectURL(url);
-    document.getElementById('photoPreview').src            = formPhoto;
-    document.getElementById('photoPreview').style.display  = 'block';
-    document.getElementById('photoPlaceholder').style.display = 'none';
-  };
-  img.src = url;
+  const files = Array.from(e.target.files);
+  if (!files.length) return;
+  files.forEach(file => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 600;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else        { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      formPhotos.push(canvas.toDataURL('image/jpeg', 0.6));
+      URL.revokeObjectURL(url);
+      renderPhotoThumbs();
+      document.getElementById('photoPlaceholder').style.display = 'none';
+    };
+    img.src = url;
+  });
+  e.target.value = '';
+}
+
+function renderPhotoThumbs() {
+  const el = document.getElementById('photoThumbs');
+  el.innerHTML = formPhotos.map((src, i) =>
+    `<div class="photo-thumb">
+      <img src="${src}" alt="照片${i+1}">
+      <button class="photo-thumb-del" onclick="removePhoto(${i})">✕</button>
+    </div>`
+  ).join('');
+  if (formPhotos.length === 0) {
+    document.getElementById('photoPlaceholder').style.display = 'block';
+  }
+}
+
+function removePhoto(idx) {
+  formPhotos.splice(idx, 1);
+  renderPhotoThumbs();
 }
 
 // ══════════════════════════════════════
@@ -1459,22 +1562,60 @@ function populateFormDropdowns() {
 // ══════════════════════════════════════
 let detailItemId = null;
 
+let detailPhotos = [];
+let detailSlideIdx = 0;
+
 function openDetail(id) {
   const it = items.find(i => i.id === id);
   if (!it) return;
   detailItemId = id;
 
-  // Photo
-  const imgEl = document.getElementById('detailImg');
-  const phEl  = document.getElementById('detailImgPlaceholder');
-  if (it.photo) {
-    imgEl.src = it.photo;
-    imgEl.style.display = 'block';
-    phEl.style.display  = 'none';
+  // Photos — slider
+  detailPhotos = it.photos && it.photos.length ? [...it.photos] : (it.photo ? [it.photo] : []);
+  const slider = document.getElementById('detailSlider');
+  const phEl   = document.getElementById('detailImgPlaceholder');
+  const dotsEl = document.getElementById('detailDots');
+  const prevBtn = document.getElementById('detailPrev');
+  const nextBtn = document.getElementById('detailNext');
+
+  if (detailPhotos.length > 0) {
+    slider.innerHTML = detailPhotos.map((src, i) =>
+      `<div class="detail-slide"><img src="${src}" alt="照片${i+1}"></div>`
+    ).join('');
+    slider.style.display = 'flex';
+    phEl.style.display = 'none';
+    detailSlideIdx = 0;
+
+    if (detailPhotos.length > 1) {
+      dotsEl.innerHTML = detailPhotos.map((_, i) =>
+        `<span class="detail-dot${i === 0 ? ' active' : ''}"></span>`
+      ).join('');
+      dotsEl.style.display = 'flex';
+      prevBtn.style.display = '';
+      nextBtn.style.display = '';
+      // 監聽 scroll 更新 dots
+      slider.onscroll = () => {
+        const idx = Math.round(slider.scrollLeft / slider.offsetWidth);
+        if (idx !== detailSlideIdx) {
+          detailSlideIdx = idx;
+          dotsEl.querySelectorAll('.detail-dot').forEach((d, i) =>
+            d.classList.toggle('active', i === idx)
+          );
+        }
+      };
+    } else {
+      dotsEl.style.display = 'none';
+      prevBtn.style.display = 'none';
+      nextBtn.style.display = 'none';
+    }
   } else {
-    imgEl.style.display = 'none';
-    phEl.style.display  = 'flex';
-    phEl.textContent    = catEmoji(it.category);
+    slider.innerHTML = '';
+    slider.style.display = 'none';
+    phEl.style.display = 'flex';
+    phEl.textContent = catEmoji(it.category);
+    dotsEl.style.display = 'none';
+    prevBtn.style.display = 'none';
+    nextBtn.style.display = 'none';
   }
 
   // Info
@@ -1487,10 +1628,36 @@ function openDetail(id) {
   document.getElementById('detailCatVal').textContent = displayVal(it.category);
   document.getElementById('detailReqVal').textContent = displayVal(it.requester);
 
+  // URL
+  const urlRow = document.getElementById('detailUrlRow');
+  const urlVal = document.getElementById('detailUrlVal');
+  if (it.url) {
+    urlVal.innerHTML = `<a class="detail-link" href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.url)}</a>`;
+    urlRow.style.display = '';
+  } else {
+    urlRow.style.display = 'none';
+  }
+
+  // Note
+  const noteRow = document.getElementById('detailNoteRow');
+  const noteVal = document.getElementById('detailNoteVal');
+  if (it.note) {
+    noteVal.textContent = it.note;
+    noteRow.style.display = '';
+  } else {
+    noteRow.style.display = 'none';
+  }
+
   // Status
   updateDetailStatus(it.purchased);
 
   document.getElementById('detailOverlay').classList.add('open');
+}
+
+function slideDetail(dir) {
+  const slider = document.getElementById('detailSlider');
+  const newIdx = Math.max(0, Math.min(detailPhotos.length - 1, detailSlideIdx + dir));
+  slider.scrollTo({ left: newIdx * slider.offsetWidth, behavior: 'smooth' });
 }
 
 function updateDetailStatus(purchased) {
