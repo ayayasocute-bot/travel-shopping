@@ -164,7 +164,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC
 
 .card-body { padding: 9px 10px; }
 .card-name-zh { font-size: 13px; font-weight: 700; color: #f0f0f5; margin-bottom: 2px; line-height: 1.35; }
-.card-name-ja { font-size: 10px; color: #6b6b80; margin-bottom: 7px; line-height: 1.4; }
 .card-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 7px; }
 .tag {
   font-size: 10px; padding: 2px 7px; border-radius: 9px;
@@ -491,7 +490,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC
 }
 .detail-body { padding: 16px 18px 20px; }
 .detail-name-zh { font-size: 20px; font-weight: 800; color: #f0f0f5; margin-bottom: 4px; }
-.detail-name-ja { font-size: 13px; color: #6b6b80; margin-bottom: 14px; }
 .detail-info { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
 .detail-row {
   display: flex; align-items: center; gap: 8px;
@@ -544,7 +542,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC
   <div class="search-wrap">
     <span class="search-icon">🔍</span>
     <input class="search-input" id="searchInput" type="text"
-      placeholder="搜尋商品（中文 / 日文名稱）…" oninput="render()">
+      placeholder="搜尋商品名稱…" oninput="render()">
   </div>
 </div>
 
@@ -599,7 +597,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC
     </div>
     <div class="detail-body">
       <div class="detail-name-zh" id="detailNameZh"></div>
-      <div class="detail-name-ja" id="detailNameJa"></div>
       <div class="detail-info">
         <div class="detail-row"><span class="detail-row-icon">📍</span><span class="detail-row-label">地點</span><span id="detailLocVal"></span></div>
         <div class="detail-row"><span class="detail-row-icon">🏷️</span><span class="detail-row-label">性質</span><span id="detailCatVal"></span></div>
@@ -644,16 +641,16 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC
       <div class="photo-thumbs" id="photoThumbs"></div>
     </div>
 
-    <!-- Chinese name -->
+    <!-- Item name -->
     <div class="form-group">
-      <label class="form-label">中文名稱 *</label>
+      <label class="form-label">品項名稱 *</label>
       <input class="form-input" id="fNameZh" type="text" placeholder="例：合利他命強效錠">
     </div>
 
-    <!-- Japanese name -->
+    <!-- URL -->
     <div class="form-group">
-      <label class="form-label">日文名稱</label>
-      <input class="form-input" id="fNameJa" type="text" placeholder="例：アリナミン EX プラス（選填）">
+      <label class="form-label">網址</label>
+      <input class="form-input" id="fUrl" type="url" placeholder="例：https://www.example.com（選填）">
     </div>
 
     <!-- Location (multi-select) -->
@@ -690,12 +687,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC
       <div class="form-chips-dropdown" id="fRequesterDrop"></div>
       <input class="form-input" id="fRequesterCustom" type="text" placeholder="輸入後按 Enter 新增…"
         style="display:none;margin-top:6px" onkeydown="if(event.key==='Enter'){addCustomChip('requester');event.preventDefault()}">
-    </div>
-
-    <!-- URL -->
-    <div class="form-group">
-      <label class="form-label">網址</label>
-      <input class="form-input" id="fUrl" type="url" placeholder="例：https://www.example.com（選填）">
     </div>
 
     <!-- Note -->
@@ -1032,9 +1023,7 @@ function filteredItems() {
       if (!match) return false;
     }
     if (q) {
-      const hit = (it.nameZh || '').toLowerCase().includes(q)
-               || (it.nameJa || '').toLowerCase().includes(q);
-      if (!hit) return false;
+      if (!(it.nameZh || '').toLowerCase().includes(q)) return false;
     }
     return true;
   });
@@ -1108,7 +1097,6 @@ function cardHTML(it) {
       <div class="card-img-wrap" onclick="openDetail('${it.id}')" style="cursor:pointer">${img}</div>
       <div class="card-body">
         <div class="card-name-zh" onclick="openDetail('${it.id}')" style="cursor:pointer">${esc(it.nameZh)}</div>
-        ${it.nameJa ? `<div class="card-name-ja" onclick="openDetail('${it.id}')" style="cursor:pointer">${esc(it.nameJa)}</div>` : ''}
         <div class="card-tags">
           ${tagsHTML(it.location,  'loc', '📍')}
           ${tagsHTML(it.category,  'cat', '🏷️')}
@@ -1175,7 +1163,6 @@ function saveItem() {
 
   const data = {
     nameZh,
-    nameJa:     document.getElementById('fNameJa').value.trim(),
     location:   formChips.location.length   ? [...formChips.location]  : [],
     category:   formChips.category.length   ? [...formChips.category]  : [],
     requester:  formChips.requester.length  ? [...formChips.requester] : [currentUser],
@@ -1215,7 +1202,6 @@ function copyToList() {
 
   const copy = {
     nameZh:    it.nameZh    || '',
-    nameJa:    it.nameJa    || '',
     location:  toArr(it.location),
     category:  toArr(it.category),
     requester: toArr(it.requester),
@@ -1252,10 +1238,9 @@ function openAddModal() {
   formPhotos = [];
   formBought = false;
   document.getElementById('modalTitle').textContent = '新增購物項目';
-  document.getElementById('fNameZh').value    = '';
-  document.getElementById('fNameJa').value    = '';
-  document.getElementById('fUrl').value       = '';
-  document.getElementById('fNote').value      = '';
+  document.getElementById('fNameZh').value  = '';
+  document.getElementById('fUrl').value    = '';
+  document.getElementById('fNote').value   = '';
   formChips.location  = [];
   formChips.category  = [];
   formChips.requester = [];
@@ -1285,10 +1270,9 @@ function startEdit(id) {
   formBought = it.purchased || false;
 
   document.getElementById('modalTitle').textContent    = '編輯購物項目';
-  document.getElementById('fNameZh').value    = it.nameZh    || '';
-  document.getElementById('fNameJa').value    = it.nameJa    || '';
-  document.getElementById('fUrl').value       = it.url       || '';
-  document.getElementById('fNote').value      = it.note      || '';
+  document.getElementById('fNameZh').value  = it.nameZh  || '';
+  document.getElementById('fUrl').value    = it.url     || '';
+  document.getElementById('fNote').value   = it.note    || '';
   // 載入多選值
   formChips.location  = toArr(it.location);
   formChips.category  = toArr(it.category);
@@ -1620,9 +1604,6 @@ function openDetail(id) {
 
   // Info
   document.getElementById('detailNameZh').textContent = it.nameZh || '';
-  const jaEl = document.getElementById('detailNameJa');
-  jaEl.textContent = it.nameJa || '';
-  jaEl.style.display = it.nameJa ? '' : 'none';
 
   document.getElementById('detailLocVal').textContent = displayVal(it.location);
   document.getElementById('detailCatVal').textContent = displayVal(it.category);
