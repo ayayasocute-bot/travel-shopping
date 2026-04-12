@@ -550,7 +550,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC
       <div class="detail-actions">
         <button class="detail-btn status-unbought" id="detailToggleBtn" onclick="detailToggleBought()"></button>
         <button class="detail-btn edit-btn" onclick="detailEdit()">✏️ 編輯</button>
-        <button class="detail-btn del-btn" onclick="detailDelete()">🗑️ 刪除</button>
       </div>
     </div>
   </div>
@@ -1520,14 +1519,9 @@ function detailToggleBought() {
 
 function detailEdit() {
   if (!detailItemId) return;
+  const id = detailItemId;
   closeDetail();
-  startEdit(detailItemId);
-}
-
-function detailDelete() {
-  if (!detailItemId) return;
-  removeItem(detailItemId);
-  closeDetail();
+  setTimeout(() => startEdit(id), 300);
 }
 
 // ══════════════════════════════════════
