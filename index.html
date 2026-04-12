@@ -585,6 +585,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC
       </div>
     </div>
 
+    <!-- Copy to other list (only in edit mode) -->
+    <div class="form-group" id="copyToListGroup" style="display:none">
+      <label class="form-label">複製到其他清單</label>
+      <div style="display:flex;gap:8px">
+        <select class="form-select" id="copyTargetList" style="flex:1"></select>
+        <button class="btn-save" onclick="copyToList()" style="margin-top:0;flex:0 0 auto;padding:11px 18px;font-size:13px">📋 複製</button>
+      </div>
+    </div>
+
     <div style="display:flex;gap:10px;margin-top:6px">
       <button class="btn-save" onclick="saveItem()" style="margin-top:0;flex:2">💾 儲存</button>
       <button class="btn-save" onclick="closeModal()" style="margin-top:0;background:#3a3a50;flex:1">取消</button>
@@ -1034,6 +1043,36 @@ function saveItem() {
   closeModal();
 }
 
+function copyToList() {
+  if (!editingId) return;
+  const it = items.find(i => i.id === editingId);
+  if (!it) return;
+  const targetId = document.getElementById('copyTargetList').value;
+  if (!targetId) return;
+  const targetList = lists.find(l => l.id === targetId);
+
+  const copy = {
+    nameZh:    it.nameZh    || '',
+    nameJa:    it.nameJa    || '',
+    location:  it.location  || '',
+    category:  it.category  || '',
+    requester: it.requester || '',
+    purchased: false,
+    photo:     it.photo     || null,
+    listId:    targetId,
+    createdAt: new Date().toISOString()
+  };
+
+  db.collection('items').add(copy).then(() => {
+    showConnStatus('📋 已複製到「' + (targetList ? targetList.name : '') + '」', 'ok');
+  }).catch(e => {
+    alert('複製失敗：' + e.message);
+    showConnStatus('❌ ' + e.code, 'err');
+  });
+
+  closeModal();
+}
+
 // ══════════════════════════════════════
 //  Modal helpers
 // ══════════════════════════════════════
@@ -1058,6 +1097,7 @@ function openAddModal() {
   document.getElementById('photoPlaceholder').style.display = 'block';
   document.getElementById('photoInput').value = '';
   setFormStatus(false);
+  document.getElementById('copyToListGroup').style.display = 'none';
   document.getElementById('modalOverlay').classList.add('open');
   setTimeout(() => document.getElementById('fNameZh').focus(), 350);
 }
@@ -1110,6 +1150,20 @@ function startEdit(id) {
   }
   document.getElementById('photoInput').value = '';
   setFormStatus(it.purchased);
+
+  // 複製到其他清單（僅編輯模式且有多個清單時顯示）
+  const copyGroup = document.getElementById('copyToListGroup');
+  const otherLists = lists.filter(l => l.id !== currentListId);
+  if (otherLists.length > 0) {
+    const sel = document.getElementById('copyTargetList');
+    sel.innerHTML = otherLists.map(l =>
+      `<option value="${l.id}">${esc(l.name)}</option>`
+    ).join('');
+    copyGroup.style.display = '';
+  } else {
+    copyGroup.style.display = 'none';
+  }
+
   document.getElementById('modalOverlay').classList.add('open');
 }
 
